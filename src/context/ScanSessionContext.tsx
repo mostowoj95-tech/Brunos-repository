@@ -2,19 +2,20 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 import type { SessionEvent } from "../types/event";
 
-export type HandoffMethod = "Outlook" | "share sheet" | "Files";
+export type HandoffMethod = "calendar" | "share sheet" | "Files";
 
 interface ScanSessionValue {
   events: SessionEvent[];
   skipped: Record<string, boolean>;
   selectMode: boolean;
   method: HandoffMethod | null;
+  handoffDetail: string | null;
   selectedEvents: SessionEvent[];
   setEvents: (events: SessionEvent[]) => void;
   updateEvent: (id: string, patch: Partial<SessionEvent>) => void;
   toggleSkip: (id: string) => void;
   setSelectMode: (value: boolean) => void;
-  setMethod: (method: HandoffMethod | null) => void;
+  setHandoff: (method: HandoffMethod, detail?: string) => void;
   reset: () => void;
 }
 
@@ -25,6 +26,7 @@ export function ScanSessionProvider({ children }: { children: React.ReactNode })
   const [skipped, setSkipped] = useState<Record<string, boolean>>({});
   const [selectMode, setSelectMode] = useState(false);
   const [method, setMethod] = useState<HandoffMethod | null>(null);
+  const [handoffDetail, setHandoffDetail] = useState<string | null>(null);
 
   const setEvents = useCallback((next: SessionEvent[]) => {
     setEventsState(next);
@@ -40,11 +42,17 @@ export function ScanSessionProvider({ children }: { children: React.ReactNode })
     setSkipped((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
 
+  const setHandoff = useCallback((nextMethod: HandoffMethod, detail?: string) => {
+    setMethod(nextMethod);
+    setHandoffDetail(detail ?? null);
+  }, []);
+
   const reset = useCallback(() => {
     setEventsState([]);
     setSkipped({});
     setSelectMode(false);
     setMethod(null);
+    setHandoffDetail(null);
   }, []);
 
   const selectedEvents = useMemo(() => events.filter((event) => !skipped[event.id]), [events, skipped]);
@@ -55,15 +63,16 @@ export function ScanSessionProvider({ children }: { children: React.ReactNode })
       skipped,
       selectMode,
       method,
+      handoffDetail,
       selectedEvents,
       setEvents,
       updateEvent,
       toggleSkip,
       setSelectMode,
-      setMethod,
+      setHandoff,
       reset,
     }),
-    [events, skipped, selectMode, method, selectedEvents, setEvents, updateEvent, toggleSkip, reset]
+    [events, skipped, selectMode, method, handoffDetail, selectedEvents, setEvents, updateEvent, toggleSkip, setHandoff, reset]
   );
 
   return <ScanSessionContext.Provider value={value}>{children}</ScanSessionContext.Provider>;
