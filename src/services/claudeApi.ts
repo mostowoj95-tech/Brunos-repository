@@ -7,21 +7,10 @@ const MODEL = "claude-opus-5";
 
 const PROMPT_TEMPLATE = (deviceTimezone: string) => `You are extracting calendar event information from a photo of an event flyer or listing screenshot.
 
-Return ONLY valid JSON (no markdown fences, no commentary) matching this schema:
-
-{
-  "events": [
-    {
-      "title": string,
-      "date": "YYYY-MM-DD",
-      "start_time": "HH:MM" | null,
-      "end_time": "HH:MM" | null,
-      "location": string | null,
-      "description": string | null,
-      "timezone": string
-    }
-  ]
-}
+For each event, also flag any field that was genuinely hard to read on the photo (blurry, cut off,
+ambiguous handwriting/print) and offer 1-3 alternative readings for each flagged field. Most fields
+on most events will not be flagged — only flag a field when the photo itself is ambiguous, not when
+you're merely inferring something reasonable (e.g. estimating an end time is not a flag).
 
 Rules:
 - If the photo shows multiple distinct events (e.g. a season brochure with several dates), return one object per event.
@@ -33,20 +22,67 @@ Rules:
 
 Device timezone: ${deviceTimezone}`;
 
+const EVENT_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    date: { type: "string", description: "YYYY-MM-DD" },
+    start_time: { type: ["string", "null"], description: "HH:MM" },
+    end_time: { type: ["string", "null"], description: "HH:MM" },
+    location: { type: ["string", "null"] },
+    description: { type: ["string", "null"] },
+    timezone: { type: "string" },
+    flagged_fields: {
+      type: "array",
+      items: { type: "string" },
+      description: "Names of fields on this event that were hard to read on the photo, e.g. [\"location\"]. Empty if none.",
+    },
+    alternatives: {
+      type: "array",
+      description: "One entry per flagged field, with alternative readings. Empty if nothing flagged.",
+      items: {
+        type: "object",
+        properties: {
+          field: { type: "string" },
+          values: { type: "array", items: { type: "string" } },
+        },
+        required: ["field", "values"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: [
+    "title",
+    "date",
+    "start_time",
+    "end_time",
+    "location",
+    "description",
+    "timezone",
+    "flagged_fields",
+    "alternatives",
+  ],
+  additionalProperties: false,
+};
+
+const OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    events: { type: "array", items: EVENT_SCHEMA },
+  },
+  required: ["events"],
+  additionalProperties: false,
+};
+
 export class ClaudeApiError extends Error {}
 export class MissingApiKeyError extends ClaudeApiError {}
 export class NoEventsFoundError extends ClaudeApiError {}
 
-function stripMarkdownFences(text: string): string {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return fenced ? fenced[1] : trimmed;
-}
-
 export async function extractEventsFromImage(
   base64Image: string,
   mediaType: string,
-  deviceTimezone: string
+  deviceTimezone: string,
+  signal?: AbortSignal
 ): Promise<ExtractedEvent[]> {
   const apiKey = await getApiKey();
   if (!apiKey) {
@@ -55,6 +91,7 @@ export async function extractEventsFromImage(
 
   const response = await fetch(ANTHROPIC_API_URL, {
     method: "POST",
+    signal,
     headers: {
       "content-type": "application/json",
       "x-api-key": apiKey,
@@ -63,6 +100,12 @@ export async function extractEventsFromImage(
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 4096,
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: OUTPUT_SCHEMA,
+        },
+      },
       messages: [
         {
           role: "user",
@@ -103,7 +146,7 @@ export async function extractEventsFromImage(
 
   let parsed: ClaudeEventsResponse;
   try {
-    parsed = JSON.parse(stripMarkdownFences(textBlock.text));
+    parsed = JSON.parse(textBlock.text);
   } catch {
     throw new ClaudeApiError("Couldn't read this image, try a clearer photo.");
   }

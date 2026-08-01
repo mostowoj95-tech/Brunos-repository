@@ -1,26 +1,28 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import { CameraIcon, ImagesIcon, GearIcon } from "phosphor-react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import type { RootStackParamList } from "../navigation/AppNavigator";
 import { getApiKey } from "../storage/apiKeyStore";
+import ThickThinRule from "../components/ThickThinRule";
+import { colors, spacing, type } from "../theme/broadsheet";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Home">;
 
 export default function HomeScreen({ navigation }: Props) {
   const [busy, setBusy] = useState(false);
 
-  async function ensureApiKeyOrRedirect(): Promise<boolean> {
-    const key = await getApiKey();
-    if (!key) {
-      Alert.alert("API key required", "Add your Anthropic API key in Settings before capturing a flyer.", [
-        { text: "Go to Settings", onPress: () => navigation.navigate("Settings") },
-      ]);
-      return false;
-    }
-    return true;
-  }
+  // If the key was cleared (e.g. in Settings) since the app launched, send the user back to Setup.
+  useFocusEffect(
+    useCallback(() => {
+      getApiKey().then((key) => {
+        if (!key) navigation.replace("Setup");
+      });
+    }, [navigation])
+  );
 
   async function handleResult(result: ImagePicker.ImagePickerResult) {
     if (result.canceled || !result.assets?.[0]) return;
@@ -30,11 +32,10 @@ export default function HomeScreen({ navigation }: Props) {
       return;
     }
     const mediaType = asset.mimeType ?? "image/jpeg";
-    navigation.navigate("Processing", { base64Image: asset.base64, mediaType });
+    navigation.navigate("Scanning", { base64Image: asset.base64, mediaType });
   }
 
   async function handleTakePhoto() {
-    if (!(await ensureApiKeyOrRedirect())) return;
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("Camera permission needed", "Enable camera access in system settings to take a photo.");
@@ -50,7 +51,6 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   async function handleChooseFromLibrary() {
-    if (!(await ensureApiKeyOrRedirect())) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("Photo library permission needed", "Enable photo access in system settings to choose an image.");
@@ -67,20 +67,42 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Pressable style={styles.gearButton} onPress={() => navigation.navigate("Settings")}>
-        <Text style={styles.gearIcon}>⚙️</Text>
+      <View style={styles.header}>
+        <Text style={type.kicker}>Photo to ICS</Text>
+        <Pressable onPress={() => navigation.navigate("Settings")} hitSlop={8}>
+          <GearIcon size={24} color={colors.accent} weight="duotone" />
+        </Pressable>
+      </View>
+      <ThickThinRule />
+
+      <Text style={styles.headline}>Which flyer are we filing today?</Text>
+      <Text style={styles.body}>
+        Snap it or pick it, and we'll pull out every event we can find — whole conference programmes
+        included.
+      </Text>
+
+      <Pressable
+        style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
+        onPress={handleTakePhoto}
+        disabled={busy}
+      >
+        <CameraIcon size={26} color={colors.bg} weight="duotone" />
+        <Text style={styles.primaryButtonText}>Take a photo</Text>
       </Pressable>
 
-      <Text style={styles.title}>Photo to ICS</Text>
-      <Text style={styles.subtitle}>Turn a flyer photo into calendar events</Text>
-
-      <Pressable style={[styles.button, styles.primaryButton]} onPress={handleTakePhoto} disabled={busy}>
-        <Text style={styles.buttonText}>Take Photo</Text>
+      <Pressable
+        style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
+        onPress={handleChooseFromLibrary}
+        disabled={busy}
+      >
+        <ImagesIcon size={26} color={colors.text} weight="duotone" />
+        <Text style={styles.secondaryButtonText}>Choose from library</Text>
       </Pressable>
 
-      <Pressable style={[styles.button, styles.secondaryButton]} onPress={handleChooseFromLibrary} disabled={busy}>
-        <Text style={[styles.buttonText, styles.secondaryButtonText]}>Choose from Library</Text>
-      </Pressable>
+      <View style={styles.spacer} />
+
+      <Text style={type.kicker}>Reads best</Text>
+      <Text style={styles.footerNote}>Printed schedules, conference programmes and event posters. Screenshots of an email work too.</Text>
     </View>
   );
 }
@@ -88,50 +110,70 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing[4],
+    paddingTop: spacing[6],
+    paddingBottom: spacing[4],
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: "#fff",
+    marginBottom: spacing[3],
   },
-  gearButton: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    padding: 8,
+  headline: {
+    ...type.screenHeadline,
+    color: colors.text,
+    marginTop: spacing[4],
   },
-  gearIcon: {
-    fontSize: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#666",
-    marginBottom: 40,
-    textAlign: "center",
-  },
-  button: {
-    width: "100%",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 16,
+  body: {
+    ...type.body,
+    color: colors.text,
+    maxWidth: 340,
+    marginTop: spacing[3],
+    marginBottom: spacing[6],
   },
   primaryButton: {
-    backgroundColor: "#1a1a1a",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    backgroundColor: colors.accent,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
+    borderRadius: 2,
+    marginBottom: spacing[3],
+  },
+  primaryButtonPressed: {
+    backgroundColor: colors.accent700,
+  },
+  primaryButtonText: {
+    ...type.eventTitleCard,
+    color: colors.bg,
   },
   secondaryButton: {
-    backgroundColor: "#f0f0f0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing[2],
+    borderWidth: 1,
+    borderColor: colors.divider,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[4],
+    borderRadius: 2,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "600",
+  secondaryButtonPressed: {
+    backgroundColor: "rgba(32,30,29,0.07)",
   },
   secondaryButtonText: {
-    color: "#1a1a1a",
+    ...type.eventTitleCard,
+    color: colors.text,
+  },
+  spacer: {
+    flex: 1,
+    minHeight: spacing[8],
+  },
+  footerNote: {
+    ...type.body,
+    color: colors.text,
+    marginTop: spacing[1],
   },
 });
