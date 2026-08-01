@@ -17,7 +17,9 @@ Setup (first run only) → Home → Scanning → Results → (Event detail/edit 
 
 - **Results** groups extracted events by day, supports a "Select" mode to exclude specific events before export, and flags any field Claude found hard to read on the photo.
 - **Event detail** lets you edit every field; a flagged field offers Claude's alternative readings as tappable chips.
-- **Hand-off sheet** writes the `.ics` and offers "Open in Outlook" / "Share the .ics file" / "Save to Files" — all three currently route through the OS share sheet (there's no stable, documented URL scheme for direct Outlook `.ics` import), except "Save to Files" on Android, which uses the Storage Access Framework to let you pick a real destination.
+- **Hand-off sheet** offers three ways to get the events out:
+  - **Add to Calendar** writes events directly into a calendar on the device via `expo-calendar` (the Android/iOS Calendar Provider), preferring a calendar synced from an Outlook/Exchange account if one exists, otherwise the device's default calendar. This is deliberately *not* a share-to-Outlook action — sharing an `.ics` file to the Outlook mobile app via the OS share sheet does not reliably create a calendar event (Outlook treats it as a generic file share, not a calendar import), so there's no reliable way to guarantee something lands specifically inside the Outlook app without this. For events added this way to actually show up *inside* the Outlook app (rather than just the phone's own Calendar app), the Outlook/Microsoft account needs to be added as a system account under the phone's own Settings → Accounts — installing the Outlook app alone isn't enough.
+  - **Share the .ics file** and **Save to Files** route through the OS share sheet / Storage Access Framework as before, for anyone who wants the raw file.
 
 ## Project layout
 
@@ -31,7 +33,8 @@ src/
 ├── theme/broadsheet.ts        # design tokens: colors, spacing, radius, type scale
 ├── services/
 │   ├── claudeApi.ts            # builds the vision request (structured output), sends image, parses JSON
-│   └── icsGenerator.ts         # event[] -> .ics string -> file
+│   ├── icsGenerator.ts         # event[] -> .ics string -> file
+│   └── deviceCalendar.ts       # event[] -> written directly into a device calendar via expo-calendar
 ├── storage/apiKeyStore.ts      # expo-secure-store wrapper
 ├── types/event.ts              # ExtractedEvent (+ confidence fields) / SessionEvent
 └── utils/

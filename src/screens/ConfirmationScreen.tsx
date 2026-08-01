@@ -10,14 +10,21 @@ import { colors, spacing, fonts, type } from "../theme/broadsheet";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Confirmation">;
 
-const METHOD_COPY: Record<string, string> = {
-  Outlook: "Handed to Outlook as events.ics.",
-  "share sheet": "Shared as events.ics.",
-  Files: "Saved to Files as events.ics.",
-};
+function describeHandoff(method: string | null, detail: string | null): string {
+  switch (method) {
+    case "calendar":
+      return `Added to your ${detail ?? "device"} calendar.`;
+    case "share sheet":
+      return "Shared as events.ics.";
+    case "Files":
+      return "Saved to Files as events.ics.";
+    default:
+      return "Handed off as events.ics.";
+  }
+}
 
 export default function ConfirmationScreen({ navigation }: Props) {
-  const { selectedEvents, method, reset } = useScanSession();
+  const { selectedEvents, method, handoffDetail, reset } = useScanSession();
   const count = selectedEvents.length;
 
   function handleScanAnother() {
@@ -31,7 +38,7 @@ export default function ConfirmationScreen({ navigation }: Props) {
       <Text style={styles.headline}>
         {count} event{count === 1 ? "" : "s"} {count === 1 ? "is" : "are"} on their way
       </Text>
-      <Text style={styles.body}>{method ? METHOD_COPY[method] : "Handed off as events.ics."} Anything you changed here went with it.</Text>
+      <Text style={styles.body}>{describeHandoff(method, handoffDetail)} Anything you changed here went with it.</Text>
 
       <ScrollView style={styles.list}>
         {selectedEvents.map((event) => (

@@ -16,7 +16,7 @@ import { colors, spacing, type, fonts } from "../theme/broadsheet";
 type Props = NativeStackScreenProps<RootStackParamList, "Results">;
 
 export default function ResultsScreen({ navigation }: Props) {
-  const { events, skipped, selectMode, selectedEvents, toggleSkip, setSelectMode, setMethod } = useScanSession();
+  const { events, skipped, selectMode, selectedEvents, toggleSkip, setSelectMode, setHandoff } = useScanSession();
   const [handoffOpen, setHandoffOpen] = useState(false);
 
   const dayGroups = groupEventsByDate(events);
@@ -47,7 +47,7 @@ export default function ResultsScreen({ navigation }: Props) {
         return;
       }
       await Sharing.shareAsync(fileUri, { mimeType: "text/calendar", dialogTitle: "Share the .ics file" });
-      setMethod("share sheet");
+      setHandoff("share sheet");
       navigation.navigate("Confirmation");
     } catch {
       Alert.alert("Error", "Couldn't create the calendar file.");
@@ -132,7 +132,7 @@ export default function ResultsScreen({ navigation }: Props) {
         >
           <CalendarPlusIcon size={20} color={colors.bg} weight="duotone" />
           <Text style={styles.primaryButtonText}>
-            {selectMode ? `Add ${selectedEvents.length} to Outlook` : `Open all ${selectedEvents.length} in Outlook`}
+            {selectMode ? `Add ${selectedEvents.length} to calendar` : `Add all ${selectedEvents.length} to calendar`}
           </Text>
         </Pressable>
         <Pressable style={styles.shareIconButton} onPress={handleQuickShare} disabled={selectedEvents.length === 0}>
@@ -144,9 +144,9 @@ export default function ResultsScreen({ navigation }: Props) {
         visible={handoffOpen}
         events={selectedEvents}
         onClose={() => setHandoffOpen(false)}
-        onHandedOff={(method) => {
+        onHandedOff={(method, detail) => {
           setHandoffOpen(false);
-          setMethod(method);
+          setHandoff(method, detail);
           navigation.navigate("Confirmation");
         }}
       />

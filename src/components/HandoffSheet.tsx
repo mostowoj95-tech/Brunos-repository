@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, Modal, Pressable, Alert, Platform } from "react-native";
+import { View, Text, StyleSheet, Modal, Pressable, Alert, Platform, Linking } from "react-native";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import { CalendarPlusIcon, ShareNetworkIcon, FolderOpenIcon } from "phosphor-react-native";
 
 import { generateIcs, writeIcsFile } from "../services/icsGenerator";
+import { addEventsToDeviceCalendar, CalendarPermissionError } from "../services/deviceCalendar";
 import type { SessionEvent } from "../types/event";
 import { colors, spacing, fonts, type } from "../theme/broadsheet";
 import type { HandoffMethod } from "../context/ScanSessionContext";
@@ -13,7 +14,7 @@ interface Props {
   visible: boolean;
   events: SessionEvent[];
   onClose: () => void;
-  onHandedOff: (method: HandoffMethod) => void;
+  onHandedOff: (method: HandoffMethod, detail?: string) => void;
 }
 
 export default function HandoffSheet({ visible, events, onClose, onHandedOff }: Props) {
@@ -38,6 +39,30 @@ export default function HandoffSheet({ visible, events, onClose, onHandedOff }: 
       onHandedOff(method);
     } catch {
       Alert.alert("Error", "Couldn't create the calendar file.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAddToCalendar() {
+    setBusy(true);
+    try {
+      const { addedCount, calendarTitle } = await addEventsToDeviceCalendar(events);
+      onHandedOff("calendar", calendarTitle);
+      void addedCount;
+    } catch (err) {
+      if (err instanceof CalendarPermissionError) {
+        Alert.alert(
+          "Calendar access needed",
+          "Enable calendar access for this app in system settings, then try again.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+      } else {
+        Alert.alert("Error", "Couldn't add the events to your calendar.");
+      }
     } finally {
       setBusy(false);
     }
@@ -78,10 +103,10 @@ export default function HandoffSheet({ visible, events, onClose, onHandedOff }: 
         <Pressable
           style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
           disabled={busy}
-          onPress={() => shareFile("Open in Outlook", "Outlook")}
+          onPress={handleAddToCalendar}
         >
           <CalendarPlusIcon size={22} color={colors.bg} weight="duotone" />
-          <Text style={styles.primaryButtonText}>Open in Outlook</Text>
+          <Text style={styles.primaryButtonText}>Add to Calendar</Text>
         </Pressable>
 
         <Pressable
